@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "136383945765",
+    "project_id": "icm-papus-taller3",
+    "storage_bucket": "icm-papus-taller3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:136383945765:android:9927922fcd082302b1b3cc",
+        "android_client_info": {
+          "package_name": "com.example.icm_papus_taller3"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDbk7uHBlEs3dp-0RdvIz3-kEe-g1TTpiw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
