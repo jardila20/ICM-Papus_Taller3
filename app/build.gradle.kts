@@ -47,4 +47,6 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
+
 }
