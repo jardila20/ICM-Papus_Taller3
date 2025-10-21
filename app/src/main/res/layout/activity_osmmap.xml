@@ -5,5 +5,38 @@
     <org.osmdroid.views.MapView
         android:id="@+id/osmMap"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
+        android:layout_height="match_parent" />
+
+    <!-- “Menú” en layout: 3 botones arriba -->
+    <LinearLayout
+        android:id="@+id/menuBar"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center"
+        android:background="#CCFFFFFF"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/btnToggleStatus"
+            android:text="Cambiar \nEstado"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/btnOpenUsers"
+            android:text="Usuarios \ndisponibles"
+            android:layout_marginStart="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/btnLogout"
+            android:text="Log \nout"
+            android:layout_marginStart="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+
 </FrameLayout>

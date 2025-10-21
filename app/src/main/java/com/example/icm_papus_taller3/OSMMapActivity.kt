@@ -2,10 +2,12 @@ package com.example.icm_papus_taller3
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.widget.Button
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -18,6 +20,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import java.io.BufferedReader
+import java.net.HttpURLConnection
+import java.net.URL
 
 class OSMMapActivity : AppCompatActivity() {
 
@@ -27,6 +31,7 @@ class OSMMapActivity : AppCompatActivity() {
     private var userMarker: Marker? = null
 
     private val USER_ZOOM = 15.0
+    private val dbUrl by lazy { getString(R.string.firebase_database_url).trimEnd('/') }
 
     private val reqPerms = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -38,10 +43,9 @@ class OSMMapActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Cargar config de OSMDroid + user agent antes de inflar layout
-        val ctx = applicationContext
+        // Config OSMDroid + user-agent antes del layout
         val prefs = getSharedPreferences("osmdroid", MODE_PRIVATE)
-        Configuration.getInstance().load(ctx, prefs)
+        Configuration.getInstance().load(applicationContext, prefs)
         Configuration.getInstance().userAgentValue = packageName
 
         setContentView(R.layout.activity_osmmap)
@@ -49,23 +53,24 @@ class OSMMapActivity : AppCompatActivity() {
         map.setTileSource(TileSourceFactory.MAPNIK)
         map.setMultiTouchControls(true)
 
-        // 1) Cargar POIs desde assets/locations.json y pintarlos
+        // Botones “menú” desde el layout
+        findViewById<Button>(R.id.btnToggleStatus).setOnClickListener { toggleStatus() }
+        findViewById<Button>(R.id.btnLogout).setOnClickListener { doLogout() }
+        findViewById<Button>(R.id.btnOpenUsers).setOnClickListener {
+            startActivity(Intent(this, AvailableUsersActivity::class.java))
+        }
+
+
+        // 1) POIs desde assets/locations.json
         val points = loadLocationsFromAssets()
         addPoiMarkers(points)
 
-        // 2) Ubicación del usuario y centrado
+        // 2) Ubicación + centrado
         requestLocationIfNeeded()
     }
 
-    override fun onResume() {
-        super.onResume()
-        map.onResume()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        map.onPause()
-    }
+    override fun onResume() { super.onResume(); map.onResume() }
+    override fun onPause() { super.onPause(); map.onPause() }
 
     // ---------- JSON ----------
     private data class GeoItem(val name: String, val lat: Double, val lng: Double)
@@ -76,21 +81,13 @@ class OSMMapActivity : AppCompatActivity() {
             val root = JSONObject(text)
             val items = mutableListOf<GeoItem>()
 
-            // locationsArray: [{name, latitude, longitude}, ...]
             if (root.has("locationsArray")) {
                 val arr = root.getJSONArray("locationsArray")
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
-                    items.add(
-                        GeoItem(
-                            name = o.optString("name", "POI ${i + 1}"),
-                            lat = o.getDouble("latitude"),
-                            lng = o.getDouble("longitude")
-                        )
-                    )
+                    items.add(GeoItem(o.optString("name","POI ${i+1}"), o.getDouble("latitude"), o.getDouble("longitude")))
                 }
             }
-            // locations: {"0": {...}, "1": {...}, ...}
             if (root.has("locations")) {
                 val obj = root.getJSONObject("locations")
                 val keys = obj.keys()
@@ -98,16 +95,10 @@ class OSMMapActivity : AppCompatActivity() {
                 while (keys.hasNext()) {
                     val k = keys.next()
                     val o = obj.getJSONObject(k)
-                    items.add(
-                        GeoItem(
-                            name = o.optString("name", "POI ${idx++}"),
-                            lat = o.getDouble("latitude"),
-                            lng = o.getDouble("longitude")
-                        )
-                    )
+                    items.add(GeoItem(o.optString("name","POI ${idx++}"), o.getDouble("latitude"), o.getDouble("longitude")))
                 }
             }
-            items.take(5) // solo 5 POIs
+            items.take(5)
         } catch (e: Exception) {
             Toast.makeText(this, "Error leyendo locations.json: ${e.message}", Toast.LENGTH_LONG).show()
             emptyList()
@@ -119,10 +110,10 @@ class OSMMapActivity : AppCompatActivity() {
         poiMarkers.forEach { map.overlays.remove(it) }
         poiMarkers.clear()
 
-        items.forEach { item ->
+        items.forEach { it ->
             val m = Marker(map).apply {
-                position = GeoPoint(item.lat, item.lng)
-                title = item.name
+                position = GeoPoint(it.lat, it.lng)
+                title = it.name
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             }
             poiMarkers.add(m)
@@ -148,12 +139,10 @@ class OSMMapActivity : AppCompatActivity() {
         val fine = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
         val coarse = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (fine != PackageManager.PERMISSION_GRANTED || coarse != PackageManager.PERMISSION_GRANTED) {
-            reqPerms.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
+            reqPerms.launch(arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ))
         } else {
             fetchLastLocation()
             centerAll()
@@ -174,7 +163,7 @@ class OSMMapActivity : AppCompatActivity() {
             }
             best?.let { loc ->
                 userPoint = GeoPoint(loc.latitude, loc.longitude)
-                centerOnUser() // centramos con zoom medio apenas tengamos posición
+                centerOnUser()
             }
         } catch (_: Exception) { /* no-op */ }
 
@@ -183,28 +172,71 @@ class OSMMapActivity : AppCompatActivity() {
 
     private fun centerOnUser() {
         val up = userPoint ?: return
-        map.controller.setZoom(USER_ZOOM)
+        map.controller.setZoom(15.0)
         map.controller.setCenter(up)
     }
 
-    // ---------- Vista ----------
     private fun centerAll() {
-        // Si tenemos ubicación, prioriza centrar en el usuario con zoom medio
-        if (userPoint != null) {
-            centerOnUser()
-            return
-        }
-        // Si no hay ubicación, encuadra los POIs
-        val points = mutableListOf<GeoPoint>()
-        poiMarkers.forEach { points.add(it.position) }
-
-        if (points.isNotEmpty()) {
-            val bbox: BoundingBox = BoundingBox.fromGeoPoints(points)
+        if (userPoint != null) { centerOnUser(); return }
+        val pts = mutableListOf<GeoPoint>()
+        poiMarkers.forEach { pts.add(it.position) }
+        if (pts.isNotEmpty()) {
+            val bbox: BoundingBox = BoundingBox.fromGeoPoints(pts)
             map.zoomToBoundingBox(bbox, true)
         } else {
-            // Fallback: Bogotá
             map.controller.setZoom(12.0)
-            map.controller.setCenter(GeoPoint(4.65, -74.06))
+            map.controller.setCenter(GeoPoint(4.65, -74.06)) // Bogotá fallback
         }
+    }
+
+    // ---------- Estado & Logout ----------
+    private fun toggleStatus() {
+        val uid = AuthSession.uid(this)
+        val token = AuthSession.token(this)
+        if (uid == null || token == null) {
+            Toast.makeText(this, "No hay sesión.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val sp = getSharedPreferences("presence", MODE_PRIVATE)
+        val current = sp.getString("status", "available") ?: "available"
+        val next = if (current == "available") "offline" else "available"
+
+        Thread {
+            try {
+                val url = URL("$dbUrl/users/$uid.json?auth=$token")
+                val body = JSONObject().put("status", next).toString()
+                val (code, resp) = httpPatchJson(url, body)
+                if (code in 200..299) {
+                    sp.edit().putString("status", next).apply()
+                    runOnUiThread { Toast.makeText(this, "Estado: $next", Toast.LENGTH_SHORT).show() }
+                } else {
+                    runOnUiThread { Toast.makeText(this, "No se pudo actualizar estado: $resp", Toast.LENGTH_LONG).show() }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    private fun doLogout() {
+        AuthSession.clear(this)
+        Toast.makeText(this, "Sesión cerrada.", Toast.LENGTH_SHORT).show()
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
+    }
+
+    // ---------- PATCH helper ----------
+    private fun httpPatchJson(url: URL, json: String): Pair<Int, String> {
+        val c = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "PATCH"
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+            doOutput = true
+        }
+        c.outputStream.use { it.write(json.toByteArray()) }
+        val code = c.responseCode
+        val text = (if (code in 200..299) c.inputStream else c.errorStream)
+            .bufferedReader().use(BufferedReader::readText)
+        return code to text
     }
 }

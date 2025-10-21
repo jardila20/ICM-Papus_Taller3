@@ -17,6 +17,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ICMPapus_Taller3">
         <activity
+            android:name=".TrackUserActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AvailableUsersActivity"
+            android:exported="false" />
+        <activity
             android:name=".OSMMapActivity"
             android:exported="false" />
         <activity
