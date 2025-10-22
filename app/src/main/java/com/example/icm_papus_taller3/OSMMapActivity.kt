@@ -190,33 +190,52 @@ class OSMMapActivity : AppCompatActivity() {
     }
 
     // ---------- Estado & Logout ----------
+
+
     private fun toggleStatus() {
         val uid = AuthSession.uid(this)
         val token = AuthSession.token(this)
+        val dbUrl = getString(R.string.firebase_database_url).trimEnd('/')
         if (uid == null || token == null) {
             Toast.makeText(this, "No hay sesión.", Toast.LENGTH_SHORT).show()
             return
         }
+
+        // alterna estado local para decidir el siguiente
         val sp = getSharedPreferences("presence", MODE_PRIVATE)
         val current = sp.getString("status", "available") ?: "available"
         val next = if (current == "available") "offline" else "available"
 
         Thread {
             try {
-                val url = URL("$dbUrl/users/$uid.json?auth=$token")
-                val body = JSONObject().put("status", next).toString()
+                val url = java.net.URL("$dbUrl/users/$uid.json?auth=$token")
+                val body = org.json.JSONObject().put("status", next).toString()
                 val (code, resp) = httpPatchJson(url, body)
                 if (code in 200..299) {
                     sp.edit().putString("status", next).apply()
-                    runOnUiThread { Toast.makeText(this, "Estado: $next", Toast.LENGTH_SHORT).show() }
+                    runOnUiThread {
+                        // toast breve que pediste cuando queda "available"
+                        if (next == "available") {
+                            val who = AuthSession.email(this) ?: "Usuario"
+                            Toast.makeText(this, "$who disponible", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(this, "Estado: offline", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 } else {
-                    runOnUiThread { Toast.makeText(this, "No se pudo actualizar estado: $resp", Toast.LENGTH_LONG).show() }
+                    runOnUiThread {
+                        Toast.makeText(this, "No se pudo actualizar estado: $resp", Toast.LENGTH_LONG).show()
+                    }
                 }
             } catch (e: Exception) {
                 runOnUiThread { Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show() }
             }
         }.start()
     }
+
+
+
+
 
     private fun doLogout() {
         AuthSession.clear(this)
